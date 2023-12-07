@@ -13,23 +13,64 @@ const LockerList = () => {
     "Oulu",
   ]);
 
-  useEffect(() => {
-    fetchLockers();
-  }, []);
+  const fetchTransactions = async () => {
+    try {
+      const response = await fetch("http://localhost:5005/api/transactions");
+      const data = await response.json();
+      // Check if the response has a 'transactions' property and it's an array
+      return data.transactions && Array.isArray(data.transactions)
+        ? data.transactions
+        : [];
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      return [];
+    }
+  };
 
   const fetchLockers = async () => {
     const response = await fetch("http://localhost:5005/api/lockers");
     const data = await response.json();
-    if (data && Array.isArray(data.lockers)) {
-      setLockers(data.lockers);
-    } else {
-      console.error("Data is not in the expected format:", data);
-    }
+    return data && Array.isArray(data.lockers) ? data.lockers : [];
   };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const lockersData = await fetchLockers();
+      const transactionsData = await fetchTransactions();
+
+      console.log("Lockers Data:", lockersData);
+      console.log("Transactions Data:", transactionsData);
+
+      const matchedLockers = lockersData.map((locker) => ({
+        ...locker,
+        cabinets: locker.cabinets.map((cabinet) => {
+          const transaction = transactionsData.find(
+            (t) => String(t.CabinetId) === String(cabinet._id) // Adjust this condition based on your data structure
+          );
+
+          if (transaction) {
+            console.log(
+              `Cabinet ${cabinet.cabinetNumber} matched with Transaction ID: ${transaction._id}`
+            );
+          } else {
+            console.log(
+              `No transaction matched for Cabinet ${cabinet.cabinetNumber}`
+            );
+          }
+
+          return { ...cabinet, transactionId: transaction?._id };
+        }),
+      }));
+
+      setLockers(matchedLockers);
+    };
+
+    fetchData();
+  }, []); // No dependencies are needed here as you want this to run only once at component mount.
 
   const handleLocationChange = (event) => {
     setSelectedLocation(event.target.value);
-    setUnlockedCabinet(null); // Reset unlocked cabinet when changing location
+    setUnlockedCabinet(null);
   };
 
   const handleCodeChange = (event) => {
@@ -39,16 +80,42 @@ const LockerList = () => {
   const handleUnlock = async () => {
     let foundCabinet = null;
     let foundLockerId = null;
+    let foundTransactionId = null;
+
+    // Fetch transactions each time a code is entered
+    const transactionsData = await fetchTransactions();
 
     lockers.forEach((locker) => {
       if (locker.location === selectedLocation) {
         locker.cabinets.forEach((cabinet) => {
           if (cabinet.code === inputCode) {
             foundCabinet = cabinet;
-            foundLockerId = locker.id; // Assuming each locker has an 'id' property
+            foundLockerId = locker.id;
+
+            // Match the cabinet with a transaction
+            const transaction = transactionsData.find(
+              (t) => String(t.CabinetId) === String(cabinet._id)
+            );
+
+            if (transaction) {
+              console.log(
+                `Cabinet ${cabinet.cabinetNumber} matched with Transaction ID: ${transaction._id}`
+              );
+              foundTransactionId = transaction._id;
+            } else {
+              console.log(
+                `No transaction matched for Cabinet ${cabinet.cabinetNumber}`
+              );
+            }
+
             const newStatus =
               cabinet.status === "occupied" ? "available" : "occupied";
-            updateCabinetStatus(cabinet, newStatus, foundLockerId);
+            updateCabinetStatus(
+              cabinet,
+              newStatus,
+              foundLockerId,
+              foundTransactionId
+            );
           }
         });
       }
@@ -67,8 +134,6 @@ const LockerList = () => {
     const updateData = {
       cabinetNumber: cabinet.cabinetNumber,
       status: newStatus,
-      currentParcel:
-        newStatus === "occupied" ? "5f50c31f1234567890abcdef" : null,
     };
 
     try {
@@ -87,16 +152,62 @@ const LockerList = () => {
         throw new Error("Failed to update cabinet status");
       } else {
         cabinet.status = newStatus;
+        if (cabinet.transactionId) {
+          await updateTransactionStatus(cabinet.transactionId, newStatus);
+        }
       }
     } catch (error) {
       console.error("Error updating locker status", error);
     }
   };
 
+  const updateTransactionStatus = async (transactionId, newCabinetStatus) => {
+    let transactionStatus;
+
+    switch (newCabinetStatus) {
+      case "occupied":
+        transactionStatus = "awaiting pickup";
+        break;
+      case "available":
+        transactionStatus = "picked up";
+        break;
+      default:
+        console.error("Invalid cabinet status");
+        return;
+    }
+
+    const updateData = {
+      parcelStatus: transactionStatus,
+    };
+
+    try {
+      const response = await fetch(
+        `http://localhost:5005/api/transactions/${transactionId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify(updateData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update transaction status");
+      }
+
+      const updatedTransaction = await response.json();
+      console.log("Transaction updated:", updatedTransaction);
+    } catch (error) {
+      console.error("Error updating transaction status:", error);
+      throw error;
+    }
+  };
+
   return (
     <div className="text-center">
       {/* Location Selector */}
-      {/* Code Input and Unlock Button */}
       <div className="location-selector mb-4">
         <select
           onChange={handleLocationChange}
@@ -111,6 +222,8 @@ const LockerList = () => {
           ))}
         </select>
       </div>
+
+      {/* Code Input and Unlock Button */}
       <div className="code-input-section mb-4">
         <input
           type="text"
@@ -126,6 +239,7 @@ const LockerList = () => {
           Unlock
         </button>
       </div>
+
       {/* Locker Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {selectedLocation &&
