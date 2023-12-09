@@ -130,7 +130,12 @@ const LockerList = () => {
     setInputCode("");
   };
 
-  const updateCabinetStatus = async (cabinet, newStatus, lockerId) => {
+  const updateCabinetStatus = async (
+    cabinet,
+    newStatus,
+    lockerId,
+    transactionId
+  ) => {
     const updateData = {
       cabinetNumber: cabinet.cabinetNumber,
       status: newStatus,
@@ -152,8 +157,9 @@ const LockerList = () => {
         throw new Error("Failed to update cabinet status");
       } else {
         cabinet.status = newStatus;
-        if (cabinet.transactionId) {
-          await updateTransactionStatus(cabinet.transactionId, newStatus);
+        console.log("XXXXXXX:", transactionId);
+        if (transactionId) {
+          await updateTransactionStatus(transactionId, newStatus);
         }
       }
     } catch (error) {
@@ -162,6 +168,8 @@ const LockerList = () => {
   };
 
   const updateTransactionStatus = async (transactionId, newCabinetStatus) => {
+    console.log("Updating transaction status:", transactionId);
+
     let transactionStatus;
 
     switch (newCabinetStatus) {
