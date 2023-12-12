@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import API_BASE_URL from "../apiConfig";
 
 const LockerList = () => {
   const [lockers, setLockers] = useState([]);
@@ -15,7 +16,7 @@ const LockerList = () => {
 
   const fetchTransactions = async () => {
     try {
-      const response = await fetch("http://localhost:5005/api/transactions");
+      const response = await fetch(`${API_BASE_URL}/api/transactions`);
       const data = await response.json();
       // Check if the response has a 'transactions' property and it's an array
       return data.transactions && Array.isArray(data.transactions)
@@ -28,7 +29,7 @@ const LockerList = () => {
   };
 
   const fetchLockers = async () => {
-    const response = await fetch("http://localhost:5005/api/lockers");
+    const response = await fetch(`${API_BASE_URL}/api/lockers`);
     const data = await response.json();
     return data && Array.isArray(data.lockers) ? data.lockers : [];
   };
@@ -143,7 +144,7 @@ const LockerList = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:5005/api/lockers/${lockerId}`,
+        `${API_BASE_URL}/api/lockers/${lockerId}`,
         {
           method: "PUT",
           headers: {
@@ -190,7 +191,7 @@ const LockerList = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:5005/api/transactions/${transactionId}`,
+        `${API_BASE_URL}/api/transactions/${transactionId}`,
         {
           method: "PUT",
           headers: {
